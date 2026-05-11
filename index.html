@@ -323,6 +323,11 @@ function initFirebase() {
     db = firebase.database();
     isFirebaseEnabled = true;
     console.log('✅ Firebase接続成功');
+    
+    // 最初にローカルストレージからデータを読み込み（初期表示用）
+    loadDataFromStorage();
+    
+    // その後Firebaseからデータ読み込み（常にリッスン）
     loadAllData();
   } catch (err) {
     console.log('ℹ️ Firebase未設定。ローカルストレージを使用します。', err);
@@ -332,16 +337,19 @@ function initFirebase() {
 
 function saveData() {
   if (isFirebaseEnabled && db) {
+    // Firebaseに保存
     db.ref('data').set({
       teamData: teamData,
       dates: dates,
       answers: answers,
       lastUpdated: new Date().toISOString()
-    }).catch(err => console.error('保存失敗:', err));
+    }).catch(err => console.error('Firebase保存失敗:', err));
   }
+  // ローカルストレージにも保存（バックアップ用）
   localStorage.setItem('noteCheckData', JSON.stringify({
     teamData, dates, answers
   }));
+  console.log('💾 データを保存しました');
 }
 
 function loadAllData() {
@@ -659,10 +667,17 @@ function handleExcel(e) {
         return;
       }
       teamData = newData;
-      saveData();
-      showPreview();
-      showToast(Object.keys(newData).length + '班分のデータを読み込みました');
+      saveData();  // Firebaseとローカルストレージに保存
+      
+      // 少し待機してUI再描画（Firebaseリスナーの自動更新を待つ）
+      setTimeout(() => {
+        showPreview();
+        refreshCurrentScreen();
+      }, 500);
+      
+      showToast(Object.keys(newData).length + '班分のデータを読み込んで保存しました');
     } catch(err) {
+      console.error('ファイル読み込みエラー:', err);
       showToast('ファイルの読み込みに失敗しました');
     }
     e.target.value = '';
@@ -731,9 +746,14 @@ function showToast(msg) {
 // ===== 初期化 =====
 initFirebase();
 document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
-buildStep1();
-showPreview();
-renderDates();
+
+// 初期画面描画（Firebaseロード待機）
+setTimeout(() => {
+  buildStep1();
+  showPreview();
+  renderDates();
+  console.log('📱 UI初期化完了');
+}, 100);
 </script>
 </body>
 </html>
