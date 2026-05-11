@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ノート提出チェック</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif; font-size: 16px; background: #E1F5EE; }
+.app { min-height: 100vh; padding: 24px 16px 48px; }
+.screen { display: none; }
+.screen.active { display: block; }
+.frame { max-width: 540px; margin: 0 auto; }
+
+.header { text-align: center; padding: 1.5rem 0 1.5rem; }
+.logo-circle { width: 72px; height: 72px; background: #1D9E75; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; box-shadow: 0 4px 16px #1D9E7540; }
+.app-title { font-size: 26px; font-weight: 700; color: #085041; }
+.app-sub { font-size: 15px; color: #0F6E56; margin-top: 6px; }
+
+.card { background: #fff; border-radius: 20px; border: 1px solid #9FE1CB; padding: 1.5rem; margin-bottom: 14px; }
+.card-title { font-size: 13px; font-weight: 700; color: #0F6E56; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.nav-btn-large { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; width: 100%; padding: 28px 20px; border-radius: 18px; border: none; background: linear-gradient(135deg, #1D9E75, #0F6E56); color: #fff; cursor: pointer; margin-bottom: 14px; box-shadow: 0 6px 20px #1D9E7540; }
+.big-icon { width: 64px; height: 64px; background: rgba(255,255,255,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+.big-label p { font-size: 22px; font-weight: 700; }
+.big-label span { font-size: 14px; opacity: 0.85; }
+.badge-free { font-size: 12px; padding: 4px 12px; border-radius: 99px; background: rgba(255,255,255,0.25); color: #fff; font-weight: 600; }
+
+.nav-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nav-btn-small { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 20px 12px; border-radius: 16px; border: 1px solid #9FE1CB; background: #fff; cursor: pointer; }
+.nav-btn-small:active { background: #E1F5EE; }
+.sm-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.ni-blue { background: #E6F1FB; }
+.ni-gray { background: #F1EFE8; }
+.sm-label p { font-size: 16px; font-weight: 700; color: #085041; text-align: center; }
+.sm-label span { font-size: 12px; color: #0F6E56; text-align: center; display: block; }
+.badge-gray { font-size: 11px; padding: 3px 10px; border-radius: 99px; background: #F1EFE8; color: #5F5E5A; font-weight: 600; }
+
+.back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: #0F6E56; background: none; border: none; cursor: pointer; padding: 0; margin-bottom: 1.25rem; font-weight: 500; }
+.back-btn-center { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; color: #0F6E56; background: none; border: 1px solid #9FE1CB; border-radius: 12px; cursor: pointer; padding: 13px; width: 100%; font-weight: 500; margin-top: 14px; }
+.back-btn-center:active { background: #E1F5EE; }
+
+.screen-circle { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
+.sc-green { background: #1D9E75; }
+.sc-blue { background: #185FA5; }
+.sc-gray { background: #5F5E5A; }
+.screen-title { font-size: 24px; font-weight: 700; color: #085041; text-align: center; margin-bottom: 6px; }
+.screen-sub { font-size: 15px; color: #0F6E56; text-align: center; margin-bottom: 1.5rem; }
+
+label { font-size: 15px; color: #0F6E56; display: block; margin-bottom: 6px; font-weight: 600; }
+select, input[type=password], input[type=text] { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid #9FE1CB; background: #F7FDFB; color: #085041; font-size: 16px; margin-bottom: 16px; outline: none; }
+select:focus, input:focus { border-color: #1D9E75; }
+
+.step-indicator { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 1.5rem; }
+.step { width: 30px; height: 30px; border-radius: 50%; background: #9FE1CB; color: #085041; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.step.active { background: #1D9E75; color: #fff; }
+.step.done { background: #0F6E56; color: #fff; }
+.step-line { flex: 1; height: 2px; background: #9FE1CB; max-width: 36px; }
+.step-line.done { background: #0F6E56; }
+
+.confirm-box { background: #E1F5EE; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 15px; color: #085041; font-weight: 500; line-height: 1.7; }
+.confirm-box strong { color: #0F6E56; }
+
+.btn-primary { width: 100%; padding: 16px; border-radius: 14px; border: none; background: #1D9E75; color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px #1D9E7540; margin-bottom: 10px; }
+.btn-primary:active { background: #0F6E56; }
+.btn-danger { width: 100%; padding: 14px; border-radius: 14px; border: 1px solid #F09595; background: #fff; color: #A32D2D; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-outline { width: 100%; padding: 14px; border-radius: 14px; border: 1px solid #9FE1CB; background: #fff; color: #0F6E56; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.btn-excel { width: 100%; padding: 14px; border-radius: 14px; border: none; background: #1E6B3A; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.pw-err { font-size: 14px; color: #A32D2D; margin: -12px 0 12px; display: none; }
+
+/* 一括回答テーブル */
+.answer-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.answer-table { width: 100%; border-collapse: collapse; }
+.answer-table th { background: #E1F5EE; padding: 10px 6px; text-align: center; font-size: 14px; font-weight: 700; color: #085041; border: 1px solid #9FE1CB; white-space: nowrap; }
+.answer-table th:first-child { text-align: left; min-width: 80px; }
+.answer-table th:nth-child(2) { min-width: 80px; }
+.answer-table td { padding: 6px 4px; border: 1px solid #E1F5EE; vertical-align: middle; }
+.answer-table td:first-child { font-size: 14px; font-weight: 600; color: #085041; padding: 6px 8px; }
+.answer-table td:nth-child(2) { font-size: 13px; color: #0F6E56; padding: 6px 8px; }
+.status-group { display: flex; gap: 3px; justify-content: center; }
+.st { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #9FE1CB; background: #F7FDFB; color: #085041; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.st:active { transform: scale(0.92); }
+.st.sel-maru  { border-color: #1D9E75; background: #E1F5EE; color: #1D9E75; }
+.st.sel-sankaku { border-color: #E8A020; background: #FFF6E0; color: #A05000; }
+.st.sel-batsu { border-color: #D84040; background: #FFECEC; color: #A32D2D; }
+.st.sel-slash { border-color: #888; background: #F0F0F0; color: #444; }
+
+/* 集計テーブル */
+.table-wrap { overflow-x: auto; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dash-table th { background: #E1F5EE; padding: 9px 10px; text-align: center; font-weight: 700; color: #085041; border: 1px solid #9FE1CB; white-space: nowrap; }
+.dash-table td { padding: 9px 10px; text-align: center; border: 1px solid #E1F5EE; color: #085041; }
+.dash-table td:first-child { text-align: left; font-weight: 600; }
+.team-header-row td { background: #0F6E56; color: #fff; font-weight: 700; font-size: 14px; text-align: left; padding: 8px 12px; }
+
+/* 設定：日時リスト */
+.date-list { border: 1px solid #9FE1CB; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.date-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; font-size: 15px; color: #085041; border-bottom: 1px solid #E1F5EE; font-weight: 500; }
+.date-row:last-child { border-bottom: none; }
+.del-btn { background: none; border: 1px solid #F09595; color: #A32D2D; border-radius: 8px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+
+/* 班プレビュー */
+.team-preview { border: 1px solid #9FE1CB; border-radius: 12px; overflow: hidden; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+.preview-team-head { background: #E1F5EE; padding: 8px 12px; font-size: 13px; font-weight: 700; color: #085041; }
+.preview-member { display: flex; justify-content: space-between; padding: 8px 14px; font-size: 13px; color: #085041; border-top: 1px solid #E1F5EE; }
+.preview-member span { color: #0F6E56; }
+
+.done-circle { width: 80px; height: 80px; background: #1D9E75; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; box-shadow: 0 6px 20px #1D9E7540; }
+
+/* トースト */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #085041; color: #fff; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 500; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+/* 隠しファイル入力 */
+#excel-input { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+<input type="file" id="excel-input" accept=".xlsx,.xls" onchange="handleExcel(event)">
+<div class="toast" id="toast"></div>
+
+<!-- ===== メニュー ===== -->
+<div id="s-menu" class="screen active">
+  <div class="frame">
+    <div class="header">
+      <div class="logo-circle">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+      </div>
+      <p class="app-title">ノート提出チェック</p>
+      <p class="app-sub">毎週の提出状況を管理します</p>
+    </div>
+    <button class="nav-btn-large" onclick="go('s-step1')">
+      <div class="big-icon"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+      <div class="big-label"><p>回答画面</p><span>提出状況を入力する</span></div>
+      <span class="badge-free">パスワード不要</span>
+    </button>
+    <div class="nav-row">
+      <button class="nav-btn-small" onclick="go('s-pw','dashboard')">
+        <div class="sm-icon ni-blue"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
+        <div class="sm-label"><p>集計画面</p><span>提出状況を確認</span></div>
+        <span class="badge-gray">認証あり</span>
+      </button>
+      <button class="nav-btn-small" onclick="go('s-pw','settings')">
+        <div class="sm-icon ni-gray"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        <div class="sm-label"><p>設定画面</p><span>班・メンバー管理</span></div>
+        <span class="badge-gray">認証あり</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== パスワード ===== -->
+<div id="s-pw" class="screen">
+  <div class="frame">
+    <button class="back-btn" onclick="go('s-menu')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div class="screen-circle sc-green"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+      <p class="screen-title">パスワード認証</p>
+      <p class="screen-sub">続けるには認証が必要です</p>
+    </div>
+    <div class="card">
+      <label for="pw">パスワード</label>
+      <input type="password" id="pw" placeholder="パスワードを入力" />
+      <p class="pw-err" id="pw-err">パスワードが違います</p>
+      <button class="btn-primary" onclick="checkPw()">ログイン</button>
+    </div>
+    <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+  </div>
+</div>
+
+<!-- ===== STEP1：週・班選択 ===== -->
+<div id="s-step1" class="screen">
+  <div class="frame">
+    <button class="back-btn" onclick="go('s-menu')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+    <div class="step-indicator">
+      <div class="step active">1</div><div class="step-line"></div><div class="step">2</div>
+    </div>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div class="screen-circle sc-green"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <p class="screen-title">日時・班を選択</p>
+      <p class="screen-sub">回答する週と班を選んでください</p>
+    </div>
+    <div class="card">
+      <label for="sel-week">回答する週</label>
+      <select id="sel-week"></select>
+      <label for="sel-team">班を選択</label>
+      <select id="sel-team"><option value="">-- 班を選んでください --</option></select>
+      <button class="btn-primary" onclick="goStep2()">次へ：回答する　→</button>
+    </div>
+    <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+  </div>
+</div>
+
+<!-- ===== STEP2：一括回答 ===== -->
+<div id="s-step2" class="screen">
+  <div class="frame">
+    <button class="back-btn" onclick="go('s-step1')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>前に戻る</button>
+    <div class="step-indicator">
+      <div class="step done">✓</div><div class="step-line done"></div><div class="step active">2</div>
+    </div>
+    <div style="text-align:center;margin-bottom:1rem">
+      <div class="screen-circle sc-green"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+      <p class="screen-title">提出状況を回答</p>
+    </div>
+    <div class="confirm-box" id="step2-confirm"></div>
+    <div class="card" style="padding:1rem">
+      <div class="answer-table-wrap">
+        <table class="answer-table">
+          <thead><tr><th>提出者</th><th>担当者</th><th style="text-align:center">回答（○ △ × /）</th></tr></thead>
+          <tbody id="answer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="submitAll()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>全員分を確定して送信</button>
+    <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+  </div>
+</div>
+
+<!-- ===== 完了 ===== -->
+<div id="s-done" class="screen">
+  <div class="frame">
+    <div style="text-align:center;padding:3rem 0">
+      <div class="done-circle"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <p style="font-size:24px;font-weight:700;color:#085041;margin-bottom:8px">送信完了！</p>
+      <p style="font-size:15px;color:#0F6E56;margin-bottom:2rem">全員の提出状況を登録しました</p>
+      <button class="btn-primary" style="max-width:280px;margin:0 auto" onclick="go('s-menu')">メニューに戻る</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 集計 ===== -->
+<div id="s-dashboard" class="screen">
+  <div class="frame">
+    <button class="back-btn" onclick="go('s-menu')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div class="screen-circle sc-blue"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
+      <p class="screen-title">集計画面</p>
+      <p class="screen-sub">全班の提出状況をまとめて確認</p>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div class="table-wrap"><table class="dash-table" id="dash-table"></table></div>
+    </div>
+    <button class="btn-excel" onclick="exportExcel()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Excelで出力する
+    </button>
+    <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+  </div>
+</div>
+
+<!-- ===== 設定 ===== -->
+<div id="s-settings" class="screen">
+  <div class="frame">
+    <button class="back-btn" onclick="go('s-menu')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div class="screen-circle sc-gray"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+      <p class="screen-title">設定画面</p>
+      <p class="screen-sub">班・日時データを管理します</p>
+    </div>
+
+    <!-- 班データ上書き -->
+    <div class="card">
+      <p class="card-title">班の追加（上書き）</p>
+      <p style="font-size:14px;color:#0F6E56;margin-bottom:12px;line-height:1.6">Excelファイルを読み込んで班データを更新します。<br>シート1枚＝1班、A列：提出者、B列：担当者</p>
+      <button class="btn-excel" onclick="document.getElementById('excel-input').click()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+        Excelファイルを読み込む
+      </button>
+      <div id="team-preview" style="display:none">
+        <p style="font-size:13px;font-weight:700;color:#085041;margin-bottom:8px">読み込んだデータ：</p>
+        <div class="team-preview" id="preview-content"></div>
+      </div>
+    </div>
+
+    <!-- 回答日時管理 -->
+    <div class="card">
+      <p class="card-title">回答日時の管理</p>
+      <p style="font-size:14px;color:#0F6E56;margin-bottom:12px;line-height:1.6">好きな形式で日時を入力できます。<br>例：2026年5月21日、2026/5/22、5月23日 など</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="new-date" placeholder="例：2026年5月18日" style="margin-bottom:0;flex:1" />
+        <button onclick="addDate()" style="padding:0 18px;border-radius:12px;border:none;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">追加</button>
+      </div>
+      <div class="date-list" id="date-list"></div>
+    </div>
+
+    <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<script>
+// ===== Firebase設定 =====
+// 📝 以下の設定をあなたのFirebaseプロジェクトの設定に置き換えてください
+// 手順：Firebaseコンソール → プロジェクト設定 → 自分のアプリ(ウェブ) から取得
+const firebaseConfig = {
+  apiKey: "AIzaSyAucTIu-PO89Xo7iB_nzsQXGYlf92kPrnc",
+  authDomain: "super-notebook-bf9bd.firebaseapp.com",
+  databaseURL: "https://super-notebook-bf9bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "super-notebook-bf9bd",
+  storageBucket: "super-notebook-bf9bd.firebasestorage.app",
+  messagingSenderId: "426333887318",
+  appId: "1:426333887318:web:da006d130decd2d39594f7"
+};
+
+
+let db = null;
+let isFirebaseEnabled = false;
+
+function initFirebase() {
+  try {
+    const app = firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    isFirebaseEnabled = true;
+    console.log('✅ Firebase接続成功');
+    loadAllData();
+  } catch (err) {
+    console.log('ℹ️ Firebase未設定。ローカルストレージを使用します。', err);
+    loadDataFromStorage();
+  }
+}
+
+function saveData() {
+  if (isFirebaseEnabled && db) {
+    db.ref('data').set({
+      teamData: teamData,
+      dates: dates,
+      answers: answers,
+      lastUpdated: new Date().toISOString()
+    }).catch(err => console.error('保存失敗:', err));
+  }
+  localStorage.setItem('noteCheckData', JSON.stringify({
+    teamData, dates, answers
+  }));
+}
+
+function loadAllData() {
+  if (isFirebaseEnabled && db) {
+    db.ref('data').on('value', snapshot => {
+      const data = snapshot.val();
+      if (data) {
+        teamData = data.teamData || teamData;
+        dates = data.dates || dates;
+        answers = data.answers || answers;
+        console.log('✅ Firebaseからデータ読み込み完了');
+      }
+    });
+  } else {
+    loadDataFromStorage();
+  }
+}
+
+function loadDataFromStorage() {
+  try {
+    const saved = localStorage.getItem('noteCheckData');
+    if (saved) {
+      const data = JSON.parse(saved);
+      teamData = data.teamData || teamData;
+      dates = data.dates || dates;
+      answers = data.answers || answers;
+      console.log('✅ ローカルストレージからデータ読み込み完了');
+    }
+  } catch (err) {
+    console.log('ℹ️ ローカルストレージは空です。初期データを使用します。');
+  }
+}
+
+// ===== データ =====
+let teamData = {
+  '1班': [
+    { name: '山田 太郎', to: '鈴木先生' },
+    { name: '鈴木 花子', to: '田中先生' },
+    { name: '田中 一郎', to: '鈴木先生' },
+  ],
+  '2班': [
+    { name: '伊藤 三郎', to: '山本先生' },
+    { name: '渡辺 四郎', to: '山本先生' },
+  ],
+  '3班': [
+    { name: '中村 六郎', to: '加藤先生' },
+    { name: '小林 七子', to: '加藤先生' },
+  ],
+};
+
+let dates = ['2026年5月11日（今週）', '2026年5月4日（先週）', '2026年4月27日'];
+
+// 回答データ: { '1班': { '2026年5月11日（今週）': { '山田 太郎': '○', ... }, ... }, ... }
+let answers = {};
+
+let pwDest = '';
+
+// ===== 画面遷移 =====
+function go(id, dest) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+  if (dest) {
+    pwDest = dest;
+    document.getElementById('pw').value = '';
+    document.getElementById('pw-err').style.display = 'none';
+  }
+  if (id === 's-step1') buildStep1();
+  if (id === 's-dashboard') buildDashboard();
+  if (id === 's-settings') buildSettings();
+}
+
+function checkPw() {
+  if (document.getElementById('pw').value === '2525') {
+    go('s-' + pwDest);
+  } else {
+    document.getElementById('pw-err').style.display = 'block';
+  }
+}
+
+// ===== STEP1 =====
+function buildStep1() {
+  // 週セレクト
+  const ws = document.getElementById('sel-week');
+  ws.innerHTML = dates.map(d => '<option>' + d + '</option>').join('');
+  // 班セレクト
+  const ts = document.getElementById('sel-team');
+  ts.innerHTML = '<option value="">-- 班を選んでください --</option>' +
+    Object.keys(teamData).map(k => '<option>' + k + '</option>').join('');
+}
+
+function goStep2() {
+  const team = document.getElementById('sel-team').value;
+  if (!team) { showToast('班を選択してください'); return; }
+  const week = document.getElementById('sel-week').value;
+
+  document.getElementById('step2-confirm').innerHTML =
+    '📅 <strong>' + week + '</strong>　👥 <strong>' + team + '</strong>';
+
+  const members = teamData[team] || [];
+  const tbody = document.getElementById('answer-tbody');
+  tbody.innerHTML = '';
+  members.forEach((m, i) => {
+    // 既存の回答を取得
+    const saved = answers[team] && answers[team][week] && answers[team][week][m.name];
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + m.name + '</td>' +
+      '<td>' + m.to + '</td>' +
+      '<td><div class="status-group">' +
+        ['○','△','×','/'].map(v => {
+          const cls = saved === v ? ' ' + selClass(v) : '';
+          return '<div class="st' + cls + '" data-row="' + i + '" data-val="' + v + '" onclick="selStatus(this)">' + v + '</div>';
+        }).join('') +
+      '</div></td>';
+    tbody.appendChild(tr);
+  });
+  go('s-step2');
+}
+
+function selClass(v) {
+  if (v==='○') return 'sel-maru';
+  if (v==='△') return 'sel-sankaku';
+  if (v==='×') return 'sel-batsu';
+  return 'sel-slash';
+}
+
+function selStatus(el) {
+  const row = el.dataset.row;
+  document.querySelectorAll('.st[data-row="' + row + '"]').forEach(b => b.className = 'st');
+  el.classList.add(selClass(el.dataset.val));
+}
+
+function submitAll() {
+  const team = document.getElementById('sel-team').value;
+  const week = document.getElementById('sel-week').value;
+  const rows = document.querySelectorAll('#answer-tbody tr');
+  let ok = true;
+  const result = {};
+  rows.forEach((tr, i) => {
+    const name = tr.cells[0].textContent;
+    const sel = tr.querySelector('.st.sel-maru, .st.sel-sankaku, .st.sel-batsu, .st.sel-slash');
+    if (!sel) { ok = false; return; }
+    result[name] = sel.dataset.val;
+  });
+  if (!ok) { showToast('全員分の回答を選択してください'); return; }
+  if (!answers[team]) answers[team] = {};
+  if (!answers[team][week]) answers[team][week] = {};
+  Object.assign(answers[team][week], result);
+  saveData();
+  go('s-done');
+}
+
+// ===== 集計 =====
+function buildDashboard() {
+  const table = document.getElementById('dash-table');
+  const teams = Object.keys(teamData);
+  const allDates = dates.slice().reverse(); // 古い順
+
+  // ヘッダー
+  let html = '<thead><tr><th style="text-align:left;min-width:90px">提出者</th><th style="min-width:80px">担当者</th>' +
+    allDates.map(d => '<th>' + d + '</th>').join('') + '</tr></thead><tbody>';
+
+  teams.forEach(team => {
+    // 班ヘッダー行
+    html += '<tr class="team-header-row"><td colspan="' + (2 + allDates.length) + '">【 ' + team + ' 】</td></tr>';
+    (teamData[team] || []).forEach(m => {
+      html += '<tr><td>' + m.name + '</td><td style="font-size:13px;color:#0F6E56">' + m.to + '</td>';
+      allDates.forEach(d => {
+        const v = answers[team] && answers[team][d] && answers[team][d][m.name];
+        html += '<td>' + (v || '－') + '</td>';
+      });
+      html += '</tr>';
+    });
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+// ===== Excel出力 =====
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  const teams = Object.keys(teamData);
+  const allDates = dates.slice().reverse();
+
+  // 見出し行を作成
+  const rows = [['班', '提出者', '担当者', ...allDates]];
+  
+  // 班ごとにデータを追加
+  teams.forEach((team, teamIdx) => {
+    (teamData[team] || []).forEach(m => {
+      const row = [team, m.name, m.to];
+      allDates.forEach(d => {
+        const v = answers[team] && answers[team][d] && answers[team][d][m.name];
+        row.push(v || '');
+      });
+      rows.push(row);
+    });
+    // 班と班の間に空行を挿入（最後の班の後には挿入しない）
+    if (teamIdx < teams.length - 1) {
+      rows.push([]);
+    }
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 12 }, ...allDates.map(() => ({ wch: 16 }))];
+
+  // スタイル設定
+  const doubleBorder = { style: 'double' };
+  const regularBorder = { style: 'thin' };
+  
+  // 1行目（ヘッダー）を太文字にし、日時列に二重線を引く
+  for (let col = 0; col < 3 + allDates.length; col++) {
+    const cellRef = XLSX.utils.encode_col(col) + '1';
+    if (!ws[cellRef]) ws[cellRef] = {};
+    ws[cellRef].font = { bold: true };
+    // 日時列（3列目以降）に二重線を引く
+    if (col >= 3) {
+      ws[cellRef].border = {
+        top: doubleBorder,
+        bottom: doubleBorder,
+        left: regularBorder,
+        right: regularBorder
+      };
+    }
+  }
+
+  // A列（班）を太文字にし、班名行に二重線を引く
+  let rowNum = 2; // 2行目から開始（1行目はヘッダー）
+  teams.forEach((team, teamIdx) => {
+    const teamMemberCount = (teamData[team] || []).length;
+    
+    // 班の最初の行のA列を太文字にし、その行に二重線を引く
+    for (let i = 0; i < teamMemberCount; i++) {
+      const cellRef = 'A' + rowNum;
+      if (!ws[cellRef]) ws[cellRef] = {};
+      ws[cellRef].font = { bold: true };
+      if (i === 0) {
+        // 班の最初の行に二重線を引く
+        ws[cellRef].border = {
+          top: doubleBorder,
+          bottom: regularBorder,
+          left: regularBorder,
+          right: regularBorder
+        };
+      }
+      rowNum++;
+    }
+    
+    // 班と班の間の空行に二重線を引く（最後の班の後には引かない）
+    if (teamIdx < teams.length - 1) {
+      const cellRef = 'A' + rowNum;
+      if (!ws[cellRef]) ws[cellRef] = {};
+      ws[cellRef].border = {
+        top: doubleBorder,
+        bottom: doubleBorder,
+        left: regularBorder,
+        right: regularBorder
+      };
+      rowNum++;
+    }
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, '集計');
+  XLSX.writeFile(wb, 'ノート提出集計.xlsx');
+  showToast('Excelを出力しました');
+}
+
+// ===== Excel読み込み（班データ上書き） =====
+function handleExcel(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const newData = {};
+      wb.SheetNames.forEach((sheetName, i) => {
+        const teamName = (i + 1) + '班';
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        const members = [];
+        rows.forEach(row => {
+          const name = (row[0] || '').toString().trim();
+          const to   = (row[1] || '').toString().trim();
+          if (name) members.push({ name, to });
+        });
+        if (members.length) newData[teamName] = members;
+      });
+      if (Object.keys(newData).length === 0) {
+        showToast('有効なデータが見つかりませんでした');
+        return;
+      }
+      teamData = newData;
+      saveData();
+      showPreview();
+      showToast(Object.keys(newData).length + '班分のデータを読み込みました');
+    } catch(err) {
+      showToast('ファイルの読み込みに失敗しました');
+    }
+    e.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function showPreview() {
+  const wrap = document.getElementById('team-preview');
+  const content = document.getElementById('preview-content');
+  wrap.style.display = 'block';
+  let html = '';
+  Object.keys(teamData).forEach(team => {
+    html += '<div class="preview-team-head">' + team + '（' + teamData[team].length + '人）</div>';
+    teamData[team].forEach(m => {
+      html += '<div class="preview-member">' + m.name + '<span>→ ' + m.to + '</span></div>';
+    });
+  });
+  content.innerHTML = html;
+}
+
+// ===== 設定：日時管理 =====
+function buildSettings() {
+  renderDates();
+  showPreview();
+}
+
+function renderDates() {
+  const list = document.getElementById('date-list');
+  if (dates.length === 0) {
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#0F6E56;font-size:14px">日時が登録されていません</div>';
+    return;
+  }
+  list.innerHTML = dates.map((d, i) =>
+    '<div class="date-row">' + d +
+    '<button class="del-btn" onclick="deleteDate(' + i + ')">削除</button></div>'
+  ).join('');
+}
+
+function addDate() {
+  const input = document.getElementById('new-date');
+  const val = input.value.trim();
+  if (!val) { showToast('日時を入力してください'); return; }
+  dates.unshift(val);
+  input.value = '';
+  saveData();
+  renderDates();
+  showToast('日時を追加しました');
+}
+
+function deleteDate(i) {
+  dates.splice(i, 1);
+  saveData();
+  renderDates();
+  showToast('日時を削除しました');
+}
+
+// ===== トースト =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== 初期化 =====
+initFirebase();
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+buildStep1();
+showPreview();
+renderDates();
+</script>
+</body>
+</html>
