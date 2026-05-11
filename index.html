@@ -353,10 +353,25 @@ function loadAllData() {
         dates = data.dates || dates;
         answers = data.answers || answers;
         console.log('✅ Firebaseからデータ読み込み完了');
+        // UI自動更新：表示中の画面に応じてUIを再描画
+        refreshCurrentScreen();
       }
     });
   } else {
     loadDataFromStorage();
+  }
+}
+
+function refreshCurrentScreen() {
+  // 現在表示中の画面を検出して再描画
+  if (document.getElementById('s-step1').classList.contains('active')) {
+    buildStep1();
+  }
+  if (document.getElementById('s-dashboard').classList.contains('active')) {
+    buildDashboard();
+  }
+  if (document.getElementById('s-settings').classList.contains('active')) {
+    buildSettings();
   }
 }
 
