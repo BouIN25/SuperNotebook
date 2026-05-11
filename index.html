@@ -384,9 +384,20 @@ function loadAllData() {
         answers = data.answers || answers;
         console.log('✅ Firebaseからデータ読み込み完了');
       } else {
-        // Firebaseが空の場合、ローカルストレージから再度同期
-        console.log('⚠️  Firebase DBが空です。ローカルストレージから復元します。');
-        loadDataFromStorage();
+        // Firebaseが空の場合、現在のメモリ上のデータを保存
+        console.log('⚠️  Firebase DBが空です。現在のデータを保存します...');
+        db.ref('data').set({
+          teamData: teamData,
+          dates: dates,
+          answers: answers,
+          lastUpdated: new Date().toISOString()
+        })
+        .then(() => {
+          console.log('✅ 初期データをFirebaseに保存しました');
+        })
+        .catch(err => {
+          console.error('❌ 初期データ保存失敗:', err.code, err.message);
+        });
       }
       // UI自動更新：表示中の画面に応じてUIを再描画
       refreshCurrentScreen();
