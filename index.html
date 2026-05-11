@@ -319,10 +319,19 @@ let isFirebaseEnabled = false;
 
 function initFirebase() {
   try {
+    // Firebase SDKが読み込まれているか確認
+    if (typeof firebase === 'undefined') {
+      console.error('❌ Firebase SDKが読み込まれていません');
+      loadDataFromStorage();
+      return;
+    }
+    
     const app = firebase.initializeApp(firebaseConfig);
     db = firebase.database();
     isFirebaseEnabled = true;
     console.log('✅ Firebase接続成功');
+    console.log('ProjectID:', firebaseConfig.projectId);
+    console.log('DatabaseURL:', firebaseConfig.databaseURL);
     
     // 最初にローカルストレージからデータを読み込み（初期表示用）
     loadDataFromStorage();
@@ -330,12 +339,15 @@ function initFirebase() {
     // その後Firebaseからデータ読み込み（常にリッスン）
     loadAllData();
   } catch (err) {
-    console.log('ℹ️ Firebase未設定。ローカルストレージを使用します。', err);
+    console.error('❌ Firebase初期化エラー:', err);
+    isFirebaseEnabled = false;
     loadDataFromStorage();
   }
 }
 
 function saveData() {
+  console.log('💾 saveData() 呼び出し - isFirebaseEnabled:', isFirebaseEnabled, 'db:', !!db);
+  
   if (isFirebaseEnabled && db) {
     // Firebaseに保存
     db.ref('data').set({
@@ -343,13 +355,22 @@ function saveData() {
       dates: dates,
       answers: answers,
       lastUpdated: new Date().toISOString()
-    }).catch(err => console.error('Firebase保存失敗:', err));
+    })
+    .then(() => {
+      console.log('✅ Firebase保存成功');
+    })
+    .catch(err => {
+      console.error('❌ Firebase保存失敗:', err.code, err.message);
+    });
+  } else {
+    console.warn('⚠️  Firebase未接続。ローカルストレージのみ保存します。');
   }
+  
   // ローカルストレージにも保存（バックアップ用）
   localStorage.setItem('noteCheckData', JSON.stringify({
     teamData, dates, answers
   }));
-  console.log('💾 データを保存しました');
+  console.log('✅ ローカルストレージに保存しました');
 }
 
 function loadAllData() {
@@ -415,8 +436,15 @@ function syncToFirebase() {
       dates: dates,
       answers: answers,
       lastUpdated: new Date().toISOString()
-    }).catch(err => console.error('Firebase同期失敗:', err));
-    console.log('🔄 ローカルデータをFirebaseに同期しました');
+    })
+    .then(() => {
+      console.log('✅ Firebase同期成功');
+    })
+    .catch(err => {
+      console.error('❌ Firebase同期失敗:', err.code, err.message);
+    });
+  } else {
+    console.warn('⚠️  Firebase未接続のため同期できません');
   }
 }
 
