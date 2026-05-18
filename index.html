@@ -344,10 +344,7 @@ function initFirebase() {
     console.log('ProjectID:', firebaseConfig.projectId);
     console.log('DatabaseURL:', firebaseConfig.databaseURL);
     
-    // 最初にローカルストレージからデータを読み込み（初期表示用）
-    loadDataFromStorage();
-    
-    // その後Firebaseからデータ読み込み（常にリッスン）
+    // Firebaseからデータ読み込み（最優先）
     loadAllData();
   } catch (err) {
     console.error('❌ Firebase初期化エラー:', err);
@@ -359,62 +356,120 @@ function initFirebase() {
 function saveData() {
   console.log('💾 saveData() 呼び出し - isFirebaseEnabled:', isFirebaseEnabled, 'db:', !!db);
   
+  // Firebaseに保存（優先）
   if (isFirebaseEnabled && db) {
-    // Firebaseに保存
-    db.ref('data').set({
-      teamData: teamData,
-      dates: dates,
-      answers: answers,
-      lastUpdated: new Date().toISOString()
-    })
-    .then(() => {
-      console.log('✅ Firebase保存成功');
-    })
-    .catch(err => {
-      console.error('❌ Firebase保存失敗:', err.code, err.message);
-    });
+    saveDataToFirebase();
   } else {
     console.warn('⚠️  Firebase未接続。ローカルストレージのみ保存します。');
   }
   
-  // ローカルストレージにも保存（バックアップ用）
-  localStorage.setItem('noteCheckData', JSON.stringify({
-    teamData, dates, answers
-  }));
-  console.log('✅ ローカルストレージに保存しました');
+  // ローカルストレージにもバックアップ保存
+  saveDataToStorage();
+}
+
+function saveDataToFirebase() {
+  if (!isFirebaseEnabled || !db) {
+    console.error('❌ Firebase未初期化');
+    return;
+  }
+  
+  db.ref('data').set({
+    teamData: teamData,
+    dates: dates,
+    answers: answers,
+    lastUpdated: new Date().toISOString()
+  })
+  .then(() => {
+    console.log('✅ Firebase保存成功');
+  })
+  .catch(err => {
+    console.error('❌ Firebase保存失敗:', err.code, err.message);
+    console.error('詳細エラー:', err);
+    
+    // エラーメッセージを表示
+    let errorMsg = 'Firebase保存エラー：';
+    if (err.code === 'PERMISSION_DENIED') {
+      errorMsg += 'セキュリティルール設定を確認してください。Firebaseコンソール → Rules';
+    } else if (err.code === 'NETWORK_ERROR') {
+      errorMsg += 'ネットワーク接続を確認してください';
+    } else {
+      errorMsg += err.message;
+    }
+    console.error(errorMsg);
+  });
+}
+
+function saveDataToStorage() {
+  try {
+    localStorage.setItem('noteCheckData', JSON.stringify({
+      teamData, dates, answers
+    }));
+    console.log('✅ ローカルストレージに保存しました');
+  } catch (err) {
+    console.error('❌ ローカルストレージ保存失敗:', err);
+  }
 }
 
 function loadAllData() {
   if (isFirebaseEnabled && db) {
-    db.ref('data').on('value', snapshot => {
+    db.ref('data').once('value', snapshot => {
       const data = snapshot.val();
-      if (data) {
-        // Firebaseにデータがあれば、それを使用
+      if (data && (data.teamData || data.dates || data.answers)) {
+        // Firebaseにデータがある場合
         teamData = data.teamData || teamData;
         dates = data.dates || dates;
         answers = data.answers || answers;
         console.log('✅ Firebaseからデータ読み込み完了');
       } else {
-        // Firebaseが空の場合、現在のメモリ上のデータを保存
-        console.log('⚠️  Firebase DBが空です。現在のデータを保存します...');
-        db.ref('data').set({
-          teamData: teamData,
-          dates: dates,
-          answers: answers,
-          lastUpdated: new Date().toISOString()
-        })
-        .then(() => {
-          console.log('✅ 初期データをFirebaseに保存しました');
-        })
-        .catch(err => {
-          console.error('❌ 初期データ保存失敗:', err.code, err.message);
-        });
+        // Firebaseが空の場合、ローカルストレージから読み込んで同期
+        console.log('⚠️  Firebase DBが空です。ローカルストレージから読み込みます...');
+        if (!loadDataFromStorage()) {
+          // ローカルストレージも空の場合、初期データをFirebaseに保存
+          saveDataToFirebase();
+        }
       }
-      // UI自動更新：表示中の画面に応じてUIを再描画
+      // その後、リアルタイムリスナーを設定
+      setupRealtimeListener();
+      // UI再描画
       refreshCurrentScreen();
+    })
+    .catch(err => {
+      console.error('❌ Firebase読み込みエラー:', err.code, err.message);
+      loadDataFromStorage();
+      setupRealtimeListener();
     });
   } else {
     loadDataFromStorage();
+  }
+}
+
+function setupRealtimeListener() {
+  // リアルタイムリスナー設定（変更を監視）
+  if (isFirebaseEnabled && db) {
+    db.ref('data').on('value', snapshot => {
+      const data = snapshot.val();
+      if (data) {
+        const updated = {
+          teamData: data.teamData,
+          dates: data.dates,
+          answers: data.answers
+        };
+        // 他のユーザーからの変更を検出
+        const hasChanges = JSON.stringify(teamData) !== JSON.stringify(updated.teamData) ||
+                          JSON.stringify(dates) !== JSON.stringify(updated.dates) ||
+                          JSON.stringify(answers) !== JSON.stringify(updated.answers);
+        
+        if (hasChanges) {
+          console.log('🔄 他のユーザーからの更新を検出。データを同期します...');
+          teamData = updated.teamData;
+          dates = updated.dates;
+          answers = updated.answers;
+          refreshCurrentScreen();
+        }
+      }
+    }, err => {
+      console.error('❌ Firebaseリスナーエラー:', err.code, err.message);
+    });
   }
 }
 
@@ -440,13 +495,12 @@ function loadDataFromStorage() {
       dates = data.dates || dates;
       answers = data.answers || answers;
       console.log('✅ ローカルストレージからデータ読み込み完了');
-      // ローカルストレージからデータを読み込んだら、Firebaseにも同期
-      syncToFirebase();
       return true;
     }
   } catch (err) {
-    console.log('ℹ️ ローカルストレージは空です。初期データを使用します。');
+    console.error('❌ ローカルストレージ読み込みエラー:', err);
   }
+  console.log('ℹ️ ローカルストレージは空です。初期データを使用します。');
   return false;
 }
 
@@ -599,8 +653,18 @@ function submitAll() {
   if (!answers[team]) answers[team] = {};
   if (!answers[team][week]) answers[team][week] = {};
   Object.assign(answers[team][week], result);
+  
+  // Firebaseに保存
   saveData();
-  go('s-done');
+  
+  // 保存確認メッセージ
+  console.log('✅ 提出内容を保存しました。全員に同期されます...');
+  showToast('送信中...');
+  
+  // Firebase保存の確認待機（1秒）
+  setTimeout(() => {
+    go('s-done');
+  }, 1000);
 }
 
 // ===== 集計 =====
@@ -760,14 +824,14 @@ function handleExcel(e) {
       teamData = newData;
       saveData();  // Firebaseとローカルストレージに保存
       
-      // 少し待機してUI再描画（Firebaseリスナーの自動更新を待つ）
+      // 少し待機してUI再描画
       setTimeout(() => {
         showPreview();
         buildSettings();
         refreshCurrentScreen();
-      }, 500);
+      }, 800);
       
-      showToast(Object.keys(newData).length + '班分のデータを読み込んで保存しました');
+      showToast(Object.keys(newData).length + '班分のデータを読み込んで保存しました。全員に同期されます。');
     } catch(err) {
       console.error('ファイル読み込みエラー:', err);
       showToast('ファイルの読み込みに失敗しました');
@@ -931,13 +995,14 @@ function showToast(msg) {
 initFirebase();
 document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
 
-// 初期画面描画（Firebaseロード待機）
+// 初期画面描画
 setTimeout(() => {
   buildStep1();
   showPreview();
   renderDates();
   console.log('📱 UI初期化完了');
-}, 100);
+  console.log('💡 トラブルシューティング：ブラウザのコンソール（F12キー）を開いて、「✅」「❌」のマークを確認してください');
+}, 500);
 </script>
 </body>
 </html>
