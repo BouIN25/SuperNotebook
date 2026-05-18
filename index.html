@@ -294,6 +294,16 @@ select:focus, input:focus { border-color: #1D9E75; }
       <div class="date-list" id="date-list"></div>
     </div>
 
+    <!-- 班名編集 -->
+    <div class="card">
+      <p class="card-title">班名の変更</p>
+      <p style="font-size:14px;color:#0F6E56;margin-bottom:12px;line-height:1.6">班の名前を変更できます。<br>例：「1班」→「米倉担当」</p>
+      <div id="team-names-list" style="display:none">
+        <!-- 班名編集フォームが動的に生成される -->
+      </div>
+      <div id="team-names-empty" style="padding:14px;text-align:center;color:#0F6E56;font-size:14px">班がまだ登録されていません。先にExcelファイルを読み込んでください</div>
+    </div>
+
     <button class="back-btn-center" onclick="go('s-menu')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>メニューに戻る</button>
   </div>
 </div>
@@ -728,7 +738,11 @@ function handleExcel(e) {
       const wb = XLSX.read(ev.target.result, { type: 'binary' });
       const newData = {};
       wb.SheetNames.forEach((sheetName, i) => {
-        const teamName = (i + 1) + '班';
+        // シート名があれば使用、なければ"i+1班"
+        let teamName = sheetName.trim();
+        if (!teamName || teamName.length === 0) {
+          teamName = (i + 1) + '班';
+        }
         const ws = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         const members = [];
@@ -749,6 +763,7 @@ function handleExcel(e) {
       // 少し待機してUI再描画（Firebaseリスナーの自動更新を待つ）
       setTimeout(() => {
         showPreview();
+        buildSettings();
         refreshCurrentScreen();
       }, 500);
       
@@ -781,10 +796,97 @@ function showPreview() {
   content.innerHTML = html;
 }
 
+function buildTeamNamesList() {
+  const list = document.getElementById('team-names-list');
+  const empty = document.getElementById('team-names-empty');
+  const teams = Object.keys(teamData);
+  
+  if (teams.length === 0) {
+    list.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  
+  list.style.display = 'block';
+  empty.style.display = 'none';
+  
+  // ソート順序を保つ（数値の班は数値でソート）
+  const sortedTeams = teams.sort((a, b) => {
+    const numA = parseInt(a.replace(/[^\d]/g, ''));
+    const numB = parseInt(b.replace(/[^\d]/g, ''));
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.localeCompare(b);
+  });
+  
+  let html = '';
+  sortedTeams.forEach((teamName, i) => {
+    const memberCount = (teamData[teamName] || []).length;
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">' +
+      '<input type="text" value="' + escapeHtml(teamName) + '" id="team-name-' + i + '" ' +
+      'style="margin-bottom:0;flex:1;font-size:14px" />' +
+      '<span style="font-size:13px;color:#0F6E56;white-space:nowrap">（' + memberCount + '人）</span>' +
+      '<button onclick="updateTeamName(' + i + ', \'' + escapeHtml(teamName) + '\')" ' +
+      'style="padding:6px 14px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>' +
+      '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function updateTeamName(index, oldName) {
+  const newNameInput = document.getElementById('team-name-' + index);
+  const newName = (newNameInput.value || '').trim();
+  
+  if (!newName) {
+    showToast('班名を入力してください');
+    return;
+  }
+  
+  if (newName === oldName) {
+    showToast('変更がありません');
+    return;
+  }
+  
+  // 班名が既に存在するかチェック
+  if (teamData.hasOwnProperty(newName) && newName !== oldName) {
+    showToast('その班名は既に使用されています');
+    return;
+  }
+  
+  // teamDataのキーを更新（順序を保持）
+  const teams = Object.keys(teamData);
+  const newTeamData = {};
+  teams.forEach(team => {
+    if (team === oldName) {
+      newTeamData[newName] = teamData[oldName];
+    } else {
+      newTeamData[team] = teamData[team];
+    }
+  });
+  teamData = newTeamData;
+  
+  // answersのキーも更新
+  if (answers.hasOwnProperty(oldName)) {
+    answers[newName] = answers[oldName];
+    delete answers[oldName];
+  }
+  
+  saveData();
+  buildTeamNamesList();
+  showPreview();
+  showToast('班名を「' + newName + '」に変更しました');
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // ===== 設定：日時管理 =====
 function buildSettings() {
   renderDates();
   showPreview();
+  buildTeamNamesList();
 }
 
 function renderDates() {
